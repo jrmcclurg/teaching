@@ -1,0 +1,98 @@
+#!/usr/bin/python
+
+import re
+import os
+import sys, getopt
+
+class Student:
+    def __init__(self, name, uid):
+        self.name = name
+        self.uid = uid
+        self.submissions = {}
+    def __str__(self):
+        result = "Student["+(self.name)+","+(self.uid)+"] {\n"
+        for s, sub in self.submissions.iteritems():
+            result += "  "+s+" => {"
+            for x in sub:
+                result += str(x)+","
+            result += "},\n"
+        #result += str(len(self.submissions))
+        result += "}"
+        return result
+
+class Submission:
+    def __init__(self, name, location):
+        self.name = name
+        self.location = location
+    def __str__(self):
+        return self.name
+
+def usage():
+    print "Usage:"
+    print "  blackboard -d <output_dir> input_dir_or_file ..."
+    sys.exit(2)
+
+def main(argv):
+    outputdir = "."
+    inputfiles = []
+
+    #print "Hello world!"
+    #print "Args: ", argv, " ;"
+
+    #for i in argv:
+    #    print i
+
+    # parse the command-line arguments
+    try:
+        opts, files = getopt.getopt(argv,"hd:",["dir="])
+    except getopt.GetoptError:
+        usage()
+
+    for opt, arg in opts:
+        if opt == "-h":
+            usage()
+        elif opt in ("-d", "--dir"):
+            outputdir = arg
+
+    for f in files:
+        if os.path.isdir(f):
+            print "adding dir: ", f
+            inputfiles += map(lambda x : os.path.join(f, x), os.listdir(f))
+        else:
+            print "adding file: ", f
+            inputfiles.append(f)
+
+    #print "Here is the result: ", inputfiles
+
+    students = {}
+
+    for f in inputfiles:
+        name = os.path.basename(f)
+        #print "TRYING: {", name, "}"
+        try:
+            m = re.search("([^_]*)_([^_]*)_[^_]*_([^_.]*)_?(.*)", name)
+            assignment = m.group(1)
+            uid = m.group(2)
+            submission = m.group(3)
+            filename = m.group(4)
+
+            if not (uid in students):
+                students[uid] = Student(uid, uid) # TODO - change the first uid to student name!
+
+            if not (submission in students[uid].submissions):
+                #print submission, " not in ", students[uid].submissions, " (", uid, ")"
+                students[uid].submissions[submission] = []
+
+            students[uid].submissions[submission].append(Submission(filename, f))
+            #print filename, " ", uid, " ", submission, " ", assignment
+        except Exception as e:
+            print "Error! ", sys.exc_info()[0]
+            #raise
+
+    for uid, student in students.iteritems():
+        print uid, " => ", student
+
+        
+
+# call the main() function
+main(sys.argv[1:])
