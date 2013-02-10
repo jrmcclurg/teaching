@@ -11,8 +11,10 @@ rootdir = os.getcwd()
 devnull = open(os.devnull, "w")
 
 def docall(cmd):
-    #subprocess.call(cmd, stdout=devnull, stderr=devnull)
-    subprocess.call(cmd)
+    try:
+        subprocess.call(cmd, stdout=devnull, stderr=devnull)
+    except Exception:
+        pass
 
 class Student:
     def __init__(self, firstname, lastname, uid):
@@ -51,28 +53,31 @@ def usage():
     print "  blackboard [options] input_dir_or_file ..."
     print "Where possible options are:"
     print "  -d <dir>   Specifies the output directory"
-    print "  -s <spec>  Sets the specification for the generated folder names,"
-    print "             where spec is e.g. \"some_prefix_%I\" where %I will"
-    print "             be replaced by the user id.  Other variables are "
-    print "             %F and %L for first and last name, and all variables"
-    print "             have a lowercase counterpart (e.g. %i, %f, %l) which"
-    print "             gives the corresponding lowercase user id, names, etc."
+    print "  -s <spec>  Sets the specification for the student folder names,"
+    print "             where the variable %i will by replaced by the user"
+    print "             id.  Other variables are %N and %L for first and last"
+    print "             name, and these variables have a lowercase counterpart"
+    print "             (e.g. %n, %l) which gives the lowercase values"
+    print "  -b <spec>  Sets the specification for the submission folder names,"
+    print "             where the variable %k is the 1-indexed submission"
+    print "             number, and the python time-formatting variables can"
+    print "             be used to get the submission timestamp"
     sys.exit(2)
 
 def main(argv):
+    # these options need to match the current specs of Blackboard
     bbtimespec = "%Y-%m-%d-%H-%M-%S"
 
-    outputdir = "."
-    inputfiles = []
+    # these commands should be supported on your system
+    unrarcmd = ["unrar", "e", "-o+"]
+    unzipcmd = ["unzip", "-j", "-o"]
 
+    # initial values for the command-line options
+    outputdir = rootdir
     outputspec = "%l_%n_%i" # $i is userid, $n is first name, $l is last name
     subspec = "submission%k_%m-%d-%Y_%H-%M-%S"
 
-    #print "Hello world!"
-    #print "Args: ", argv, " ;"
-
-    #for i in argv:
-    #    print i
+    inputfiles = []
 
     # parse the command-line arguments
     try:
@@ -84,7 +89,7 @@ def main(argv):
         if opt == "-h":
             usage()
         elif opt in ("-d", "--dir"):
-            outputdir = arg
+            outputdir = os.path.abspath(arg)
         elif opt in ("-s", "--outspec"):
             outputspec = arg
         elif opt in ("-b", "--subspec"):
@@ -92,19 +97,16 @@ def main(argv):
 
     for f in files:
         if os.path.isdir(f):
-            print "adding dir: ", f
-            inputfiles += map(lambda x : os.path.join(f, x), os.listdir(f))
+            #print "adding dir: ", f
+            inputfiles += map(lambda x : os.path.join(rootdir, f, x), os.listdir(f))
         else:
-            print "adding file: ", f
+            #print "adding file: ", f
             inputfiles.append(f)
-
-    #print "Here is the result: ", inputfiles
 
     students = {}
 
     for f in inputfiles:
         name = os.path.basename(f)
-        #print "TRYING: {", name, "}"
         try:
             m = re.search("([^_]*)_([^_]*)_[^_]*_([^_.]*)_?(.*)", name)
             assignment = m.group(1)
@@ -118,7 +120,6 @@ def main(argv):
                 students[uid] = Student("", "", uid)
 
             if not (t in students[uid].submissions):
-                #print submission, " not in ", students[uid].submissions, " (", uid, ")"
                 students[uid].submissions[t] = []
 
             if filename == ".txt":
@@ -133,39 +134,50 @@ def main(argv):
                 h.close()
             else:
                 students[uid].submissions[t].append(Submission(filename, f))
-            #print filename, " ", uid, " ", submission, " ", assignment
         except Exception as e:
             print "Error! ", sys.exc_info()[0]
             #raise
 
-
+    numsubs = 0
+    count = 1
+    num = len(students)
     for uid, student in sorted(students.iteritems()):
-        #print uid, " => ", student
         dirname = replacespec(outputspec, uid, student.firstname, student.lastname)
-        dirname = re.sub("%i", uid, outputspec)
-        dirname = re.sub("%N", student.firstname, dirname)
-        dirname = re.sub("%n", student.firstname.lower(), dirname)
-        dirname = re.sub("%L", student.lastname, dirname)
-        dirname = re.sub("%l", student.lastname.lower(), dirname)
         createdir = os.path.join(outputdir, dirname)
-        print createdir
-        index = 1
-        for t, sub in sorted(student.submissions.iteritems()):
-            dirname = replacespec(subspec, uid, student.firstname, student.lastname)
-            dirname = re.sub("%k", str(index), dirname)
-            subdir = os.path.join(createdir, dirname)
-            print "   ", subdir
+        print dirname #, "(", count, "/", num, ")"
+        index = len(student.submissions) 
+        flag = True
+        for t, sub in reversed(sorted(student.submissions.iteritems())):
+            dirname2 = replacespec(subspec, uid, student.firstname, student.lastname)
+            dirname2 = re.sub("%k", str(index), dirname2)
+            subdir = os.path.join(createdir, dirname2)
+            print "   ", dirname2, "(", len(sub), "files)", time.strftime("%d-%m-%Y @ %H:%M:%S", t)
+            numsubs += 1
             if not os.path.exists(subdir):
                 os.makedirs(subdir)
-            os.chdir(rootdir)
-            os.chdir(subdir)
             for f in sub:
                 newloc = os.path.join(subdir, f.name)
                 shutil.copyfile(f.location, newloc)
-                print "      ", f.location, " => ", newloc
-                if f.name.lower().endsWith(".rar"):
-                    docall(["unrar", "t", f.name])
-            index += 1
+                #if flag:
+                #    print "      ", f.location, " => ", subdir
+                #print "      ", f.name
+                #print "      ", f.location, " => ", newloc
+                #print str(count), "\t", dirname, "\t", dirname2, "\t", f.name
+                if f.name.lower().endswith(".rar"):
+                    os.chdir(subdir)
+                    docall(unrarcmd.append(f.name))
+                    #os.chdir(rootdir)
+                elif f.name.lower().endswith(".zip"):
+                    os.chdir(subdir)
+                    docall(unzipcmd.append(f.name))
+                    #os.chdir(rootdir)
+            index -= 1
+            flag = False
+        count += 1
+
+    print "\nFinished:"
+    print "Processed ", count-1, "students."
+    print "Processed ", numsubs, "submissions."
 
 # 2013-02-08-09-13-28  
 # 2013-02-07-18-39-59
