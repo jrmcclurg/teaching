@@ -1,16 +1,27 @@
 #!/usr/bin/python
 
+#import zipfile
+import time
 import re
-import os
+import os, shutil
 import sys, getopt
+import subprocess
+
+rootdir = os.getcwd()
+devnull = open(os.devnull, "w")
+
+def docall(cmd):
+    #subprocess.call(cmd, stdout=devnull, stderr=devnull)
+    subprocess.call(cmd)
 
 class Student:
-    def __init__(self, name, uid):
-        self.name = name
+    def __init__(self, firstname, lastname, uid):
+        self.firstname = firstname
+        self.lastname = lastname
         self.uid = uid
         self.submissions = {}
     def __str__(self):
-        result = "Student["+(self.name)+","+(self.uid)+"] {\n"
+        result = "Student["+(self.firstname)+" "+self.lastname+","+(self.uid)+"] {\n"
         for s, sub in self.submissions.iteritems():
             result += "  "+s+" => {"
             for x in sub:
@@ -27,14 +38,35 @@ class Submission:
     def __str__(self):
         return self.name
 
+def replacespec(spec, uid, firstname, lastname):
+    dirname = re.sub("%i", uid, spec)
+    dirname = re.sub("%N", firstname, dirname)
+    dirname = re.sub("%n", firstname.lower(), dirname)
+    dirname = re.sub("%L", lastname, dirname)
+    dirname = re.sub("%l", lastname.lower(), dirname)
+    return dirname
+
 def usage():
     print "Usage:"
-    print "  blackboard -d <output_dir> input_dir_or_file ..."
+    print "  blackboard [options] input_dir_or_file ..."
+    print "Where possible options are:"
+    print "  -d <dir>   Specifies the output directory"
+    print "  -s <spec>  Sets the specification for the generated folder names,"
+    print "             where spec is e.g. \"some_prefix_%I\" where %I will"
+    print "             be replaced by the user id.  Other variables are "
+    print "             %F and %L for first and last name, and all variables"
+    print "             have a lowercase counterpart (e.g. %i, %f, %l) which"
+    print "             gives the corresponding lowercase user id, names, etc."
     sys.exit(2)
 
 def main(argv):
+    bbtimespec = "%Y-%m-%d-%H-%M-%S"
+
     outputdir = "."
     inputfiles = []
+
+    outputspec = "%l_%n_%i" # $i is userid, $n is first name, $l is last name
+    subspec = "submission%k_%m-%d-%Y_%H-%M-%S"
 
     #print "Hello world!"
     #print "Args: ", argv, " ;"
@@ -44,7 +76,7 @@ def main(argv):
 
     # parse the command-line arguments
     try:
-        opts, files = getopt.getopt(argv,"hd:",["dir="])
+        opts, files = getopt.getopt(argv,"hd:s:b:",["dir=","outspec=","subspec="])
     except getopt.GetoptError:
         usage()
 
@@ -53,6 +85,10 @@ def main(argv):
             usage()
         elif opt in ("-d", "--dir"):
             outputdir = arg
+        elif opt in ("-s", "--outspec"):
+            outputspec = arg
+        elif opt in ("-b", "--subspec"):
+            subspec = arg
 
     for f in files:
         if os.path.isdir(f):
@@ -76,22 +112,63 @@ def main(argv):
             submission = m.group(3)
             filename = m.group(4)
 
+            t = time.strptime(submission, bbtimespec)
+
             if not (uid in students):
-                students[uid] = Student(uid, uid) # TODO - change the first uid to student name!
+                students[uid] = Student("", "", uid)
 
-            if not (submission in students[uid].submissions):
+            if not (t in students[uid].submissions):
                 #print submission, " not in ", students[uid].submissions, " (", uid, ")"
-                students[uid].submissions[submission] = []
+                students[uid].submissions[t] = []
 
-            students[uid].submissions[submission].append(Submission(filename, f))
+            if filename == ".txt":
+                h = open(f, "r")
+                for line in h:
+                    try:
+                        m2 = re.search("Name: *([^ ]*) *(.*?) *\\(", line)
+                        students[uid].firstname = m2.group(1)
+                        students[uid].lastname = m2.group(2)
+                    except Exception:
+                        pass
+                h.close()
+            else:
+                students[uid].submissions[t].append(Submission(filename, f))
             #print filename, " ", uid, " ", submission, " ", assignment
         except Exception as e:
             print "Error! ", sys.exc_info()[0]
             #raise
 
-    for uid, student in students.iteritems():
-        print uid, " => ", student
 
+    for uid, student in sorted(students.iteritems()):
+        #print uid, " => ", student
+        dirname = replacespec(outputspec, uid, student.firstname, student.lastname)
+        dirname = re.sub("%i", uid, outputspec)
+        dirname = re.sub("%N", student.firstname, dirname)
+        dirname = re.sub("%n", student.firstname.lower(), dirname)
+        dirname = re.sub("%L", student.lastname, dirname)
+        dirname = re.sub("%l", student.lastname.lower(), dirname)
+        createdir = os.path.join(outputdir, dirname)
+        print createdir
+        index = 1
+        for t, sub in sorted(student.submissions.iteritems()):
+            dirname = replacespec(subspec, uid, student.firstname, student.lastname)
+            dirname = re.sub("%k", str(index), dirname)
+            subdir = os.path.join(createdir, dirname)
+            print "   ", subdir
+            if not os.path.exists(subdir):
+                os.makedirs(subdir)
+            os.chdir(rootdir)
+            os.chdir(subdir)
+            for f in sub:
+                newloc = os.path.join(subdir, f.name)
+                shutil.copyfile(f.location, newloc)
+                print "      ", f.location, " => ", newloc
+                if f.name.lower().endsWith(".rar"):
+                    docall(["unrar", "t", f.name])
+            index += 1
+
+# 2013-02-08-09-13-28  
+# 2013-02-07-18-39-59
         
 
 # call the main() function
