@@ -7,14 +7,12 @@ import os, shutil
 import sys, getopt
 import subprocess
 
-rootdir = os.getcwd()
-devnull = open(os.devnull, "w")
+# these options need to match the current specs of Blackboard
+bbtimespec = "%Y-%m-%d-%H-%M-%S"
 
-def docall(cmd):
-    try:
-        subprocess.call(cmd, stdout=devnull, stderr=devnull)
-    except Exception:
-        pass
+# these commands should be supported on your system
+unrarcmd = ["unrar", "e", "-o+"]
+unzipcmd = ["unzip", "-j", "-o"]
 
 class Student:
     def __init__(self, firstname, lastname, uid):
@@ -64,14 +62,34 @@ def usage():
     print "             be used to get the submission timestamp"
     sys.exit(2)
 
+rootdir = os.getcwd()
+devnull = open(os.devnull, "w")
+
+def docall(cmd):
+    try:
+        subprocess.call(cmd, stdout=devnull, stderr=devnull)
+        #subprocess.call(cmd)
+    except Exception:
+        raise
+
+def copyfile(f, subdir):
+    newloc = os.path.join(subdir, f.name)
+    shutil.copyfile(f.location, newloc)
+    #if flag:
+    #    print "      ", f.location, " => ", subdir
+    #print "      ", f.name
+    #print "      ", f.location, " => ", newloc
+    #print str(count), "\t", dirname, "\t", dirname2, "\t", f.name
+    if f.name.lower().endswith(".rar"):
+        os.chdir(subdir)
+        docall(unrarcmd+[f.name])
+        #os.chdir(rootdir)
+    elif f.name.lower().endswith(".zip"):
+        os.chdir(subdir)
+        docall(unzipcmd+[f.name])
+        #os.chdir(rootdir)
+
 def main(argv):
-    # these options need to match the current specs of Blackboard
-    bbtimespec = "%Y-%m-%d-%H-%M-%S"
-
-    # these commands should be supported on your system
-    unrarcmd = ["unrar", "e", "-o+"]
-    unzipcmd = ["unzip", "-j", "-o"]
-
     # initial values for the command-line options
     outputdir = rootdir
     outputspec = "%l_%n_%i" # $i is userid, $n is first name, $l is last name
@@ -156,21 +174,9 @@ def main(argv):
             if not os.path.exists(subdir):
                 os.makedirs(subdir)
             for f in sub:
-                newloc = os.path.join(subdir, f.name)
-                shutil.copyfile(f.location, newloc)
-                #if flag:
-                #    print "      ", f.location, " => ", subdir
-                #print "      ", f.name
-                #print "      ", f.location, " => ", newloc
-                #print str(count), "\t", dirname, "\t", dirname2, "\t", f.name
-                if f.name.lower().endswith(".rar"):
-                    os.chdir(subdir)
-                    docall(unrarcmd.append(f.name))
-                    #os.chdir(rootdir)
-                elif f.name.lower().endswith(".zip"):
-                    os.chdir(subdir)
-                    docall(unzipcmd.append(f.name))
-                    #os.chdir(rootdir)
+                copyfile(f, subdir)
+                if flag:
+                    copyfile(f, createdir)
             index -= 1
             flag = False
         count += 1
