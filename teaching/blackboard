@@ -1,5 +1,12 @@
 #!/usr/bin/python
 
+##########################################
+#  Blackboard assignment file processor  #
+#  by Jedidiah R. McClurg                #
+#  Northwestern University               #
+#  2-10-2013                             #
+##########################################
+
 #import zipfile
 import time
 import re
@@ -7,7 +14,7 @@ import os, shutil
 import sys, getopt
 import subprocess
 
-# these options need to match the current specs of Blackboard
+# this option needs to match the current specs of Blackboard
 bbtimespec = "%Y-%m-%d-%H-%M-%S"
 
 # these commands should be supported on your system
@@ -60,6 +67,31 @@ def usage():
     print "             where the variable %k is the 1-indexed submission"
     print "             number, and the python time-formatting variables can"
     print "             be used to get the submission timestamp"
+    print "Example usages:"
+    print "  blackboard -d temp mydir"
+    print ""
+    print "  This is the same as the below command, except that the default"
+    print "  student directory names (%l_%n_%i) are used, as well as the default"
+    print "  submission subdirectory names (submission%k_%m-%d-%Y_%H-%M-%S)."
+    print ""
+    print "  blackboard -d temp -s %i -b sub%k mydir"
+    print ""
+    print "  If mydir contains the raw assignment files downloaded from the"
+    print "  Blackboard 'full grade center', this command produces the"
+    print "  following type of directory structure:"
+    print "    temp"
+    print "      jsmith"
+    print "         sub1"
+    print "           someAssignmentFile.foo"
+    print "           ..."
+    print "         sub2"
+    print "           ..."
+    print "      jdoe"
+    print "         sub1"
+    print "           ..."
+    print "  The most recent assignment files (e.g submission 2 for jsmith"
+    print "  and submission1 for jdoe in this case) are also copied into"
+    print "  the root dir for the corresponding student."
     sys.exit(2)
 
 rootdir = os.getcwd()
@@ -168,6 +200,7 @@ def main(argv):
         for t, sub in reversed(sorted(student.submissions.iteritems())):
             dirname2 = replacespec(subspec, uid, student.firstname, student.lastname)
             dirname2 = re.sub("%k", str(index), dirname2)
+            dirname2 = time.strftime(dirname2, t)
             subdir = os.path.join(createdir, dirname2)
             print "   ", dirname2, "(", len(sub), "files)", time.strftime("%d-%m-%Y @ %H:%M:%S", t)
             numsubs += 1
