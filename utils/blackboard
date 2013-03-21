@@ -176,7 +176,7 @@ def main(argv):
                 h = open(f, "r")
                 for line in h:
                     try:
-                        m2 = re.search("Name: *([^ ]*) *(.*?) *\\(", line)
+                        m2 = re.search("^Name: *([^ ]*) *(.*?) *\\(", line)
                         students[uid].firstname = m2.group(1)
                         students[uid].lastname = m2.group(2)
                     except Exception:
